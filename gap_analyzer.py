@@ -8,19 +8,22 @@ def parse_year(text):
     except:
         return None
 
+
 def build_timeline(parsed):
     timeline = []
 
-    for edu in parsed.get("education", []):
+    for edu in parsed["education"]:
         timeline.append({
             "type": "Education",
+            "label": edu.get("degree"),
             "start": parse_year(edu.get("start_year")),
             "end": parse_year(edu.get("end_year")),
         })
 
-    for job in parsed.get("employment", []):
+    for job in parsed["employment"]:
         timeline.append({
             "type": "Employment",
+            "label": job.get("company"),
             "start": parse_year(job.get("start_date")),
             "end": parse_year(job.get("end_date")) or datetime.now().year,
         })
@@ -33,27 +36,11 @@ def build_timeline(parsed):
 def detect_gaps(timeline):
     gaps = []
     for i in range(len(timeline) - 1):
-        gap = timeline[i+1]["start"] - timeline[i]["end"]
-        if gap > 0:
+        gap = timeline[i + 1]["start"] - timeline[i]["end"]
+        if gap > 1:
             gaps.append({
                 "from": timeline[i]["end"],
-                "to": timeline[i+1]["start"],
+                "to": timeline[i + 1]["start"],
                 "duration_years": gap
             })
     return gaps
-
-
-# ==============================
-# AUTO GAP FILLING (C)
-# ==============================
-def auto_fill_gaps(gaps, target_role):
-    filled = []
-    for gap in gaps:
-        filled.append({
-            "company": "Confidential Client Project",
-            "role": target_role,
-            "start": gap["from"],
-            "end": gap["to"],
-            "description": f"Worked on {target_role} project during gap period."
-        })
-    return filled

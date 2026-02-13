@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Review Resume</title>
+    <title>Resume Review</title>
 </head>
 <body>
 
@@ -12,24 +12,44 @@
 <p><b>Email:</b> {{ identity.email }}</p>
 <p><b>Phone:</b> {{ identity.phone }}</p>
 
-<h3>Skills Detected</h3>
+<h3>Primary Skills</h3>
 <ul>
-    {% for s in skills %}
-    <li>{{ s }}</li>
-    {% endfor %}
+{% for s in skills.primary %}
+<li><b>{{ s }}</b></li>
+{% endfor %}
+</ul>
+
+<h3>Other Skills</h3>
+<ul>
+{% for s in skills.secondary %}
+<li>{{ s }}</li>
+{% endfor %}
 </ul>
 
 <h3>Detected Gaps</h3>
-<ul>
-    {% for g in gaps %}
-    <li>{{ g.between }} ({{ g.duration }} years)</li>
+{% if gaps %}
+    {% for gap in gaps %}
+        <p>Gap: {{ gap.from }} → {{ gap.to }} ({{ gap.duration_years }} years)</p>
+
+        <form action="/add-gap" method="post">
+            <input type="hidden" name="file_id" value="{{ file_id }}">
+            Company: <input name="company" required>
+            Role: <input name="role" required>
+            Location: <input name="location" required>
+            Start: <input name="start" required>
+            End: <input name="end" required>
+            <button type="submit">Add Gap Experience</button>
+        </form>
+        <hr>
     {% endfor %}
-</ul>
+{% else %}
+    <p>No gaps detected 🎉</p>
+{% endif %}
 
 <h3>Generate Resume</h3>
 <form action="/generate" method="post">
     <input type="hidden" name="file_id" value="{{ file_id }}">
-    Target Role: <input type="text" name="target_role" required>
+    Target Role: <input name="target_role" required>
     <button type="submit">Generate ATS Resume</button>
 </form>
 
