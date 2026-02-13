@@ -5,7 +5,6 @@ import uuid
 import os
 
 from resume_parser import parse_resume
-from gap_analyzer import build_timeline, detect_gaps
 from resume_optimizer import generate_resume
 from exporter import export_to_word
 
@@ -16,79 +15,96 @@ templates = Jinja2Templates(directory="templates")
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-session_store = {}
 
-
+# ==============================
+# HOME PAGE
+# ==============================
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 
+# ==============================
+# UPLOAD RESUME → PARSE → REVIEW
+# ==============================
 @app.post("/upload", response_class=HTMLResponse)
 async def upload_resume(request: Request, file: UploadFile = File(...)):
-    file_id = str(uuid.uuid4())
-    file_path = os.path.join(UPLOAD_DIR, f"{file_id}_{file.filename}")
+    try:
+        file_id = str(uuid.uuid4())
+        file_path = os.path.join(UPLOAD_DIR, f"{file_id}_{file.filename}")
 
-    with open(file_path, "wb") as f:
-        f.write(await file.read())
+        # Save file
+        with open(file_path, "wb") as f:
+            f.write(await file.read())
 
-    parsed = parse_resume(file_path)
+        # Parse resume text
+        parsed = parse_resume(file_path)
 
-    timeline = build_timeline(parsed)
-    gaps = detect_gaps(timeline)
+        # Ensure parsed structure exists
+        identity = parsed.get("identity", {})
+        skills = parsed.get("skills", [])
+        education = parsed.get("education", [])
+        employment = parsed.get("employment", [])
 
-    session_store[file_id] = {
-        "file_path": file_path,
-        "parsed": parsed,
-        "gaps": gaps,
-    }
+        return templates.TemplateResponse(
+            "review.html",
+            {
+                "request": request,
+                "identity": identity,
+                "skills": skills,
+                "education": education,
+                "employment": employment,
+                "file_id": file_id,
+            },
+        )
 
-    return templates.TemplateResponse(
-        "review.html",
-        {
-            "request": request,
-            "file_id": file_id,
-            "identity": parsed.get("identity"),
-            "skills": parsed.get("skills"),
-            "gaps": gaps,
-        },
-    )
+    except Exception as e:
+        return HTMLResponse(f"<h3>Upload Error:</h3><pre>{str(e)}</pre>", status_code=500)
 
 
+# ==============================
+# GENERATE FINAL RESUME
+# ==============================
 @app.post("/generate")
 async def generate(
     file_id: str = Form(...),
     target_role: str = Form(...),
-    gap_action: str = Form("ignore"),
-    employer: str = Form(""),
-    job_title: str = Form(""),
-    location: str = Form(""),
 ):
-    data = session_store[file_id]
-    parsed = data["parsed"]
+    try:
+        # Find uploaded file
+        file_path = None
+        for f in os.listdir(UPLOAD_DIR):
+            if f.startswith(file_id):
+                file_path = os.path.join(UPLOAD_DIR, f)
+                break
 
-    additional_experience = []
+        if not file_path:
+            return HTMLResponse("File not found", status_code=404)
 
-    if gap_action == "fill" and employer:
-        additional_experience.append({
-            "company": employer,
-            "role": job_title or target_role,
-            "location": location,
-        })
+        # Parse again for full data
+        parsed = parse_resume(file_path)
 
-    final_resume = generate_resume(
-        target_role=target_role,
-        original_resume=parsed.get("raw_text"),
-        education=parsed.get("education"),
-        employment=parsed.get("employment"),
-        additional_experience=additional_experience,
-    )
+        identity = parsed.get("identity", {})
+        skills = parsed.get("skills", [])
+        education = parsed.get("education", [])
+        employment = parsed.get("employment", [])
 
-    candidate_name = parsed["identity"]["name"].replace(" ", "_")
-    output_file = f"{candidate_name}_ATS_Resume.docx"
+        # Generate resume
+        final_resume = generate_resume(
+            target_role=target_role,
+            original_resume=str(parsed),
+            education=education,
+            employment=employment,
+            additional_experience=[],
+        )
 
-    export_to_word(final_resume, output_file)
+        # Save with candidate name
+        candidate_name = identity.get("name", "Candidate").replace(" ", "_")
+        output_file = f"{candidate_name}_ATS_Resume.docx"
 
-    os.remove(data["file_path"])
+        export_to_word(final_resume, output_file)
 
-    return FileResponse(output_file, filename=output_file)
+        return FileResponse(output_file, filename=output_file)
+
+    except Exception as e:
+        return HTMLResponse(f"<h3>Generation Error:</h3><pre>{str(e)}</pre>", status_code=500)
