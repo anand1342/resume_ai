@@ -107,12 +107,14 @@ async def generate_final_resume(
     data = session_store[file_id]
 
     final_resume = generate_resume(
-        target_role=target_role,
-        original_resume=data["raw_text"],
-        education=data["parsed"].get("education", []),
-        employment=data["parsed"].get("employment", []),
-        additional_experience=[],
+    target_role=target_role,
+    original_resume=data["raw_text"],
+    education=data["parsed"].get("education", []),
+    employment=data["parsed"].get("employment", []),
+    additional_experience=[],
+    identity=data.get("identity", {}),
     )
+    
 
     candidate_name = data["identity"].get("name", "Candidate").replace(" ", "_")
     output_file = os.path.join(
