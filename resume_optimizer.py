@@ -1,47 +1,41 @@
 import os
 import re
 from openai import OpenAI
+from ats_scorer import calculate_ats_score
 
-# Initialize OpenAI client
+# ==============================
+# OpenAI Client
+# ==============================
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # ==============================
-# SYSTEM PROMPT (Guardrails)
+# SYSTEM PROMPT (STRICT GUARDRAILS)
 # ==============================
 SYSTEM_PROMPT = """
 You are a Senior US Recruiter and ATS Specialist.
 
 IDENTITY LOCK:
 - Preserve candidate name, email, phone, location, LinkedIn, GitHub exactly.
-- Never replace with placeholders.
+- Never replace identity with placeholders.
 
 EMPLOYMENT INTEGRITY:
 - Keep existing employers and dates unchanged.
 - Only add experience for user-provided gaps.
-- Do not fabricate companies.
+- Do NOT fabricate companies.
 
-SKILL INTEGRITY (CRITICAL):
+SKILL INTEGRITY:
 - Only use skills present in the original resume.
-- You may group, categorize, or rephrase them.
+- You may group or categorize them.
 - You may infer closely related capabilities.
-- DO NOT introduce new technologies not mentioned.
+- DO NOT introduce new technologies.
 
 ROLE ALIGNMENT:
 - Reframe responsibilities to match the target role using existing skills.
-- Do not change factual history.
+- Do not alter factual history.
 """
 
-
 # ==============================
-# Extract ATS Score
-# ==============================
-def extract_ats_score(text: str) -> float:
-    match = re.search(r"ATS Score:\s*([0-9.]+)", text)
-    return float(match.group(1)) if match else 0.0
-
-
-# ==============================
-# Skill Extraction Guard
+# SKILL EXTRACTION
 # ==============================
 def extract_skills(text: str):
     """
@@ -50,7 +44,6 @@ def extract_skills(text: str):
     lines = text.lower().split("\n")
     skills = set()
 
-    # Expand this list over time
     keywords = [
         "python", "java", "c++", "c#", "sql", "mysql", "postgresql",
         "aws", "azure", "docker", "kubernetes", "pandas", "numpy",
@@ -69,7 +62,7 @@ def extract_skills(text: str):
 
 
 # ==============================
-# Resume Generator
+# RESUME GENERATOR
 # ==============================
 def generate_resume(
     target_role,
@@ -85,7 +78,9 @@ def generate_resume(
     # Extract allowed skills
     allowed_skills = extract_skills(original_resume)
 
-    # Build prompt
+    # ==============================
+    # USER PROMPT
+    # ==============================
     USER_PROMPT = f"""
 Create an ATS-optimized resume.
 
@@ -114,10 +109,12 @@ Rules:
 - Align responsibilities with target role.
 - Use ONLY allowed skills.
 - Do NOT introduce new technologies.
-- Provide ATS evaluation at the end.
-- Print clearly: ATS Score: X.X
+- Ensure ATS-friendly formatting.
 """
 
+    # ==============================
+    # CALL MODEL
+    # ==============================
     response = client.chat.completions.create(
         model="gpt-4.1",
         temperature=0.2,
@@ -127,5 +124,17 @@ Rules:
         ],
     )
 
-    output = response.choices[0].message.content
-    return output
+    resume_text = response.choices[0].message.content
+
+    # ==============================
+    # REAL ATS SCORING
+    # ==============================
+    ats_score = calculate_ats_score(resume_text, target_role)
+
+    final_output = (
+        resume_text
+        + "\n\n====================\n"
+        + f"REAL ATS Score: {ats_score}/10\n"
+    )
+
+    return final_output
