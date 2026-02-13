@@ -1,9 +1,13 @@
 import re
-
 import os
 from openai import OpenAI
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# Ensure API key is loaded securely from environment
+api_key = os.getenv("OPENAI_API_KEY")
+if not api_key:
+    raise ValueError("OPENAI_API_KEY environment variable is not set.")
+
+client = OpenAI(api_key=api_key)
 
 SYSTEM_PROMPT = """
 You are a Senior US Recruiter and ATS Specialist.
@@ -45,7 +49,7 @@ The resume MUST read like the candidate primarily belongs to the Target Role.
 """
 
 
-def extract_ats_score(text):
+def extract_ats_score(text: str) -> float:
     for line in text.splitlines():
         if "ATS Score" in line:
             match = re.search(r"([0-9]+(\.[0-9]+)?)", line)
@@ -93,18 +97,23 @@ After writing:
 4. If ATS < 9.0, internally revise before returning.
 """
 
-        response = client.chat.completions.create(
-            model="gpt-4.1",
-            temperature=0.2,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": USER_PROMPT}
-            ]
-        )
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4.1",
+                temperature=0.2,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": USER_PROMPT},
+                ],
+            )
 
-        output = response.choices[0].message.content
+            output = response.choices[0].message.content or ""
+
+        except Exception as e:
+            print(f"OpenAI Error on attempt {attempt}: {e}")
+            continue
+
         score = extract_ats_score(output)
-
         print(f"Attempt {attempt}, ATS Score: {score}")
 
         final_output = output
