@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Recruiter Dashboard</title>
+    <style>
+        body { font-family: Arial; margin: 40px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ccc; padding: 10px; }
+        th { background: #f4f4f4; }
+        a.button {
+            padding: 6px 12px;
+            background: #007BFF;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+
+<h2>Recruiter Dashboard</h2>
+
+<table>
+    <tr>
+        <th>Candidate</th>
+        <th>Primary Skills</th>
+        <th>Gap Count</th>
+        <th>Action</th>
+    </tr>
+
+    {% for c in candidates %}
+    <tr>
+        <td>{{ c.name }}</td>
+        <td>{{ c.primary_skills }}</td>
+        <td>{{ c.gap_count }}</td>
+        <td>
+            <a class="button" href="/review?file_id={{ c.file_id }}">Review</a>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+
+<br>
+<a href="/">⬅ Upload Another Resume</a>
+
+</body>
+</html>

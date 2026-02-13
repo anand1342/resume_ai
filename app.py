@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request, UploadFile, File, Form
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 import uuid
 import os
@@ -10,9 +10,6 @@ from gap_analyzer import build_timeline, detect_gaps
 from resume_optimizer import generate_resume
 from exporter import export_to_word
 
-# ==============================
-# APP INIT
-# ==============================
 app = FastAPI(title="AI Resume Builder")
 
 templates = Jinja2Templates(directory="templates")
@@ -22,7 +19,7 @@ OUTPUT_DIR = "outputs"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# Temporary in-memory session store
+# In-memory store (for demo — can move to DB later)
 session_store = {}
 
 # ==============================
@@ -32,58 +29,68 @@ session_store = {}
 def home(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
+
+# ==============================
+# DASHBOARD PAGE
+# ==============================
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard(request: Request):
+    candidates = []
+
+    for file_id, data in session_store.items():
+        candidates.append({
+            "file_id": file_id,
+            "name": data["identity"].get("name", "Unknown"),
+            "primary_skills": ", ".join(data["skills"].get("primary", [])),
+            "gap_count": len(data["gaps"]),
+        })
+
+    return templates.TemplateResponse(
+        "dashboard.html",
+        {"request": request, "candidates": candidates},
+    )
+
+
 # ==============================
 # UPLOAD RESUME
 # ==============================
 @app.post("/upload", response_class=HTMLResponse)
 async def upload_resume(request: Request, file: UploadFile = File(...)):
-    try:
-        file_id = str(uuid.uuid4())
-        file_path = os.path.join(UPLOAD_DIR, f"{file_id}_{file.filename}")
+    file_id = str(uuid.uuid4())
+    file_path = os.path.join(UPLOAD_DIR, f"{file_id}_{file.filename}")
 
-        # Save uploaded file
-        with open(file_path, "wb") as f:
-            f.write(await file.read())
+    with open(file_path, "wb") as f:
+        f.write(await file.read())
 
-        # Extract clean text (PDF/DOCX/TXT safe)
-        raw_text = extract_text(file_path)
+    raw_text = extract_text(file_path)
 
-        if not raw_text:
-            return HTMLResponse("❌ Could not extract text from file.", status_code=400)
+    parsed = parse_resume(raw_text)
+    identity = extract_identity(raw_text)
+    skills_data = extract_skills(raw_text)
 
-        # Parse resume
-        parsed = parse_resume(raw_text)
-        identity = extract_identity(raw_text)
-        skills_data = extract_skills(raw_text)
+    timeline = build_timeline(parsed)
+    gaps = detect_gaps(timeline)
 
-        # Timeline & gaps
-        timeline = build_timeline(parsed)
-        gaps = detect_gaps(timeline)
+    session_store[file_id] = {
+        "raw_text": raw_text,
+        "parsed": parsed,
+        "identity": identity,
+        "skills": skills_data,
+        "gaps": gaps,
+    }
 
-        # Store session data
-        session_store[file_id] = {
-            "raw_text": raw_text,
-            "parsed": parsed,
+    return templates.TemplateResponse(
+        "review.html",
+        {
+            "request": request,
+            "file_id": file_id,
             "identity": identity,
-            "skills": skills_data,
+            "primary_skills": skills_data.get("primary", []),
+            "secondary_skills": skills_data.get("secondary", []),
             "gaps": gaps,
-        }
+        },
+    )
 
-        # Render review page
-        return templates.TemplateResponse(
-            "review.html",
-            {
-                "request": request,
-                "file_id": file_id,
-                "identity": identity,
-                "primary_skills": skills_data.get("primary", []),
-                "secondary_skills": skills_data.get("secondary", []),
-                "gaps": gaps,
-            },
-        )
-
-    except Exception as e:
-        return HTMLResponse(f"❌ Upload failed: {str(e)}", status_code=500)
 
 # ==============================
 # GENERATE FINAL RESUME
@@ -94,35 +101,28 @@ async def generate_final_resume(
     file_id: str = Form(...),
     target_role: str = Form(...),
 ):
-    try:
-        if file_id not in session_store:
-            return HTMLResponse("❌ Session expired. Please upload again.", status_code=400)
+    if file_id not in session_store:
+        return HTMLResponse("Session expired. Please upload again.", status_code=400)
 
-        data = session_store[file_id]
+    data = session_store[file_id]
 
-        final_resume = generate_resume(
-            target_role=target_role,
-            original_resume=data["raw_text"],
-            education=data["parsed"].get("education", []),
-            employment=data["parsed"].get("employment", []),
-            additional_experience=[],
-        )
+    final_resume = generate_resume(
+        target_role=target_role,
+        original_resume=data["raw_text"],
+        education=data["parsed"].get("education", []),
+        employment=data["parsed"].get("employment", []),
+        additional_experience=[],
+    )
 
-        # Use candidate name for filename
-        candidate_name = data["identity"].get("name", "Candidate").replace(" ", "_")
-        safe_role = target_role.replace(" ", "_")
+    candidate_name = data["identity"].get("name", "Candidate").replace(" ", "_")
+    output_file = os.path.join(
+        OUTPUT_DIR, f"{candidate_name}_{target_role.replace(' ', '_')}.docx"
+    )
 
-        output_file = os.path.join(
-            OUTPUT_DIR, f"{candidate_name}_{safe_role}.docx"
-        )
+    export_to_word(final_resume, output_file)
 
-        export_to_word(final_resume, output_file)
-
-        return FileResponse(
-            output_file,
-            filename=os.path.basename(output_file),
-            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        )
-
-    except Exception as e:
-        return HTMLResponse(f"❌ Resume generation failed: {str(e)}", status_code=500)
+    return FileResponse(
+        output_file,
+        filename=os.path.basename(output_file),
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )

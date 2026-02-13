@@ -1,57 +1,153 @@
 import re
+from collections import Counter
 
-# ===============================
-# IDENTITY EXTRACTION
-# ===============================
+# ==============================
+# RESUME PARSER
+# ==============================
 
-def extract_identity(text: str) -> dict:
+def parse_resume(text):
     """
-    Extract candidate identity from clean resume text.
+    Extract education and employment timeline from resume text.
+    This is a lightweight parser — avoids hallucination.
     """
 
-    identity = {
-        "name": "",
-        "email": "",
-        "phone": "",
-        "location": "",
-        "linkedin": "",
-        "github": "",
+    education = []
+    employment = []
+
+    # ------------------------------
+    # EDUCATION EXTRACTION
+    # ------------------------------
+    edu_patterns = [
+        r"(Bachelor|Master|B\.Tech|M\.Tech|BSc|MSc|MBA)[^\n]*\b(20\d{2})\b",
+        r"(University|College)[^\n]*\b(20\d{2})\b",
+    ]
+
+    for pattern in edu_patterns:
+        for match in re.findall(pattern, text, re.IGNORECASE):
+            education.append({
+                "degree": match[0],
+                "end_year": match[-1],
+                "start_year": "",
+                "field": ""
+            })
+
+    # ------------------------------
+    # EMPLOYMENT EXTRACTION
+    # ------------------------------
+    job_patterns = [
+        r"([A-Z][A-Za-z &]+)\s*\|\s*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?.*\d{4}\s*[-–]\s*(Present|\d{4})",
+        r"([A-Z][A-Za-z &]+)\s*(20\d{2})\s*[-–]\s*(20\d{2}|Present)",
+    ]
+
+    for pattern in job_patterns:
+        for match in re.findall(pattern, text):
+            employment.append({
+                "company": match[0],
+                "role": "",
+                "start_date": match[1] if len(match) > 1 else "",
+                "end_date": match[-1],
+            })
+
+    return {
+        "education": education,
+        "employment": employment,
     }
 
-    if not text:
-        return identity
 
-    # Email
-    email_match = re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text)
+# ==============================
+# IDENTITY EXTRACTION (ROBUST)
+# ==============================
+def extract_identity(text):
+    """
+    Extract name, email, phone safely.
+    Prevents garbage values from binary text.
+    """
+
+    lines = [l.strip() for l in text.split("\n") if l.strip()]
+
+    name = ""
+    email = ""
+    phone = ""
+
+    # ------------------------------
+    # EMAIL
+    # ------------------------------
+    email_match = re.search(r"[\w\.-]+@[\w\.-]+", text)
     if email_match:
-        identity["email"] = email_match.group()
+        email = email_match.group(0)
 
-    # Phone
-    phone_match = re.search(r"\+?\d[\d\-\s]{8,}\d", text)
+    # ------------------------------
+    # PHONE
+    # ------------------------------
+    phone_match = re.search(r"\+?\d[\d\-\(\) ]{8,}\d", text)
     if phone_match:
-        identity["phone"] = phone_match.group()
+        phone = phone_match.group(0)
 
-    # LinkedIn
-    linkedin_match = re.search(r"linkedin\.com/in/[A-Za-z0-9\-_/]+", text, re.I)
-    if linkedin_match:
-        identity["linkedin"] = linkedin_match.group()
+    # ------------------------------
+    # NAME DETECTION LOGIC
+    # ------------------------------
+    for line in lines[:10]:  # only first meaningful lines
+        if any(char.isdigit() for char in line):
+            continue
+        if "@" in line:
+            continue
+        if len(line) < 3 or len(line) > 50:
+            continue
 
-    # GitHub
-    github_match = re.search(r"github\.com/[A-Za-z0-9\-_/]+", text, re.I)
-    if github_match:
-        identity["github"] = github_match.group()
+        words = line.split()
 
-    # Name → assume first non-empty line without symbols
-    lines = text.split("\n")
-    for line in lines[:10]:
-        line = line.strip()
-        if len(line.split()) >= 2 and not any(char.isdigit() for char in line):
-            identity["name"] = line
+        # Must look like a real name
+        if 2 <= len(words) <= 4 and all(w[0].isupper() for w in words):
+            name = line
             break
 
-    # Location (simple heuristic)
-    location_match = re.search(r"[A-Za-z]+,\s?[A-Za-z]{2}", text)
-    if location_match:
-        identity["location"] = location_match.group()
+    # ------------------------------
+    # FALLBACK FROM EMAIL
+    # ------------------------------
+    if not name and email:
+        username = email.split("@")[0]
+        username = username.replace(".", " ").replace("_", " ")
+        name = username.title()
 
-    return identity
+    return {
+        "name": name if name else "Candidate",
+        "email": email,
+        "phone": phone,
+    }
+
+
+# ==============================
+# SKILL EXTRACTION WITH WEIGHTING
+# ==============================
+def extract_skills(text):
+    """
+    Extract skills and determine primary vs secondary based on frequency.
+    """
+
+    text_lower = text.lower()
+
+    skill_keywords = [
+        "java", "spring", "spring boot", "hibernate",
+        "python", "django", "flask",
+        "c#", ".net", "asp.net",
+        "javascript", "react", "angular", "vue",
+        "aws", "azure", "docker", "kubernetes",
+        "sql", "mysql", "postgresql", "mongodb",
+        "microservices", "rest api", "kafka", "jenkins"
+    ]
+
+    found = []
+    for skill in skill_keywords:
+        if skill in text_lower:
+            count = text_lower.count(skill)
+            found.extend([skill] * count)
+
+    counter = Counter(found)
+
+    primary = [skill for skill, count in counter.items() if count >= 3]
+    secondary = [skill for skill, count in counter.items() if count < 3]
+
+    return {
+        "primary": sorted(primary),
+        "secondary": sorted(secondary),
+    }
