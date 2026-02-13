@@ -5,5 +5,3 @@ python-multipart
 openai
 python-docx
 python-dotenv
-PyPDF2
-

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Review</title>
+</head>
+<body>
+    <h2>Candidate Info</h2>
+    <p>Name: {{ identity.name }}</p>
+    <p>Email: {{ identity.email }}</p>
+
+    <h3>Skills</h3>
+    <ul>
+        {% for s in skills %}
+        <li>{{ s }}</li>
+        {% endfor %}
+    </ul>
+
+    <h3>Detected Gaps</h3>
+    <ul>
+        {% for g in gaps %}
+        <li>{{ g.from }} → {{ g.to }} ({{ g.duration }} years)</li>
+        {% endfor %}
+    </ul>
+
+    <h2>Generate Resume</h2>
+    <form action="/generate" method="post">
+        <input type="hidden" name="file_id" value="{{ file_id }}">
+
+        Target Role: <input type="text" name="target_role" required><br><br>
+
+        Fill Gap?
+        <select name="gap_action">
+            <option value="ignore">Ignore</option>
+            <option value="fill">Fill with Experience</option>
+        </select><br><br>
+
+        Employer: <input type="text" name="employer"><br>
+        Job Title: <input type="text" name="job_title"><br>
+        Location: <input type="text" name="location"><br><br>
+
+        <button type="submit">Generate ATS Resume</button>
+    </form>
+</body>
+</html>
