@@ -34,6 +34,21 @@ ROLE ALIGNMENT:
 """
 
 # ==============================
+# ATS SCORE EXTRACTION
+# ==============================
+def extract_ats_score(text: str) -> float:
+    """
+    Extract ATS score from model output.
+    """
+    for line in text.splitlines():
+        if "ATS Score" in line:
+            match = re.search(r"([0-9]+(\.[0-9]+)?)", line)
+            if match:
+                return float(match.group(1))
+    return 0.0
+
+
+# ==============================
 # SKILL EXTRACTION
 # ==============================
 def extract_skills(text: str):
@@ -109,6 +124,9 @@ Rules:
 - Use ONLY allowed skills.
 - Do NOT introduce new technologies.
 - Ensure ATS-friendly formatting.
+
+At the end, print:
+ATS Score: X.X
 """
 
     # ==============================
@@ -126,9 +144,9 @@ Rules:
     resume_text = response.choices[0].message.content
 
     # ==============================
-    # REAL ATS SCORING
+    # ATS SCORING (from model output)
     # ==============================
-    ats_score = calculate_ats_score(resume_text, target_role)
+    ats_score = extract_ats_score(resume_text)
 
     final_output = (
         resume_text
