@@ -1,40 +1,68 @@
 import re
-
-# -----------------------------
-# EDUCATION EXTRACTION
-# -----------------------------
-def extract_education(text: str):
-    education = []
-    lines = text.split("\n")
-
-    for line in lines:
-        if any(keyword in line.lower() for keyword in ["bachelor", "master", "b.tech", "m.tech", "bsc", "msc"]):
-            years = re.findall(r"(19|20)\d{2}", line)
-            education.append({
-                "degree": line.strip(),
-                "field": "",
-                "start_year": years[0] if years else "",
-                "end_year": years[-1] if len(years) > 1 else "",
-            })
-
-    return education
+from docx import Document
+import pdfplumber
 
 
-# -----------------------------
-# EMPLOYMENT EXTRACTION
-# -----------------------------
-def extract_employment(text: str):
-    employment = []
-    lines = text.split("\n")
+# ===============================
+# FILE TEXT EXTRACTION
+# ===============================
 
-    for i, line in enumerate(lines):
-        if any(keyword in line.lower() for keyword in ["developer", "engineer", "analyst", "consultant"]):
-            dates = re.findall(r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?\s?(20\d{2})", line)
-            employment.append({
-                "company": line.strip(),
-                "role": line.strip(),
-                "start_date": dates[0][1] if dates else "",
-                "end_date": dates[-1][1] if dates else "",
-            })
+def extract_text(file_path: str) -> str:
+    """
+    Extract clean text from PDF, DOCX, or TXT.
+    Prevents binary garbage like PK headers.
+    """
 
-    return employment
+    if file_path.lower().endswith(".pdf"):
+        return extract_pdf_text(file_path)
+
+    if file_path.lower().endswith(".docx"):
+        return extract_docx_text(file_path)
+
+    if file_path.lower().endswith(".txt"):
+        with open(file_path, "r", errors="ignore") as f:
+            return f.read()
+
+    return ""
+
+
+def extract_pdf_text(file_path: str) -> str:
+    text = ""
+    try:
+        with pdfplumber.open(file_path) as pdf:
+            for page in pdf.pages:
+                text += page.extract_text() or ""
+    except:
+        pass
+    return clean_text(text)
+
+
+def extract_docx_text(file_path: str) -> str:
+    text = ""
+    try:
+        doc = Document(file_path)
+        for para in doc.paragraphs:
+            text += para.text + "\n"
+    except:
+        pass
+    return clean_text(text)
+
+
+# ===============================
+# CLEAN TEXT
+# ===============================
+
+def clean_text(text: str) -> str:
+    """
+    Remove binary artifacts & normalize.
+    """
+    if not text:
+        return ""
+
+    # Remove non-printable characters
+    text = re.sub(r"[^\x20-\x7E\n]", "", text)
+
+    # Normalize spaces
+    text = re.sub(r"\s+", " ", text)
+
+    return text.strip()

@@ -1,67 +1,57 @@
 import re
-from collections import Counter
-from skill_analyzer import analyze_skills
 
-
-# -----------------------------
+# ===============================
 # IDENTITY EXTRACTION
-# -----------------------------
-def extract_identity(text: str):
-    email = re.search(r"[\w\.-]+@[\w\.-]+", text)
-    phone = re.search(r"\+?\d[\d\s\-]{8,}", text)
+# ===============================
 
+def extract_identity(text: str) -> dict:
+    """
+    Extract candidate identity from clean resume text.
+    """
+
+    identity = {
+        "name": "",
+        "email": "",
+        "phone": "",
+        "location": "",
+        "linkedin": "",
+        "github": "",
+    }
+
+    if not text:
+        return identity
+
+    # Email
+    email_match = re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text)
+    if email_match:
+        identity["email"] = email_match.group()
+
+    # Phone
+    phone_match = re.search(r"\+?\d[\d\-\s]{8,}\d", text)
+    if phone_match:
+        identity["phone"] = phone_match.group()
+
+    # LinkedIn
+    linkedin_match = re.search(r"linkedin\.com/in/[A-Za-z0-9\-_/]+", text, re.I)
+    if linkedin_match:
+        identity["linkedin"] = linkedin_match.group()
+
+    # GitHub
+    github_match = re.search(r"github\.com/[A-Za-z0-9\-_/]+", text, re.I)
+    if github_match:
+        identity["github"] = github_match.group()
+
+    # Name → assume first non-empty line without symbols
     lines = text.split("\n")
-    name = lines[0].strip() if lines else "Candidate"
+    for line in lines[:10]:
+        line = line.strip()
+        if len(line.split()) >= 2 and not any(char.isdigit() for char in line):
+            identity["name"] = line
+            break
 
-    return {
-        "name": name,
-        "email": email.group(0) if email else "",
-        "phone": phone.group(0) if phone else "",
-    }
+    # Location (simple heuristic)
+    location_match = re.search(r"[A-Za-z]+,\s?[A-Za-z]{2}", text)
+    if location_match:
+        identity["location"] = location_match.group()
 
-
-# -----------------------------
-# SKILL EXTRACTION + WEIGHTING
-# -----------------------------
-KNOWN_SKILLS = [
-    "java", "spring", "spring boot", "c#", ".net", "asp.net",
-    "python", "django", "flask",
-    "aws", "azure", "docker", "kubernetes",
-    "sql", "mysql", "postgresql", "mongodb",
-    "react", "angular", "vue", "javascript",
-    "microservices", "kafka", "jenkins"
-]
-
-
-def extract_skills(text):
-    primary, secondary, weighted = analyze_skills(text)
-    return {
-        "primary": primary,
-        "secondary": secondary,
-        "weighted": weighted
-    }
-
-    for skill in KNOWN_SKILLS:
-        occurrences = text_lower.count(skill)
-        if occurrences:
-            counter[skill] += occurrences
-
-    primary = [skill for skill, count in counter.most_common(5)]
-    secondary = [skill for skill in counter if skill not in primary]
-
-    return {
-        "primary": primary,
-        "secondary": secondary,
-        "all": list(counter.keys())
-    }
-
-
-# -----------------------------
-# PARSE RESUME (STRUCTURED)
-# -----------------------------
-def parse_resume(text: str):
-    # kept for compatibility
-    return {
-        "education": [],
-        "employment": []
-    }
+    return identity
