@@ -10,7 +10,6 @@ from exporter import export_to_word
 
 app = FastAPI(title="Resume AI")
 
-# Ensure templates directory exists (prevents Render errors)
 templates = Jinja2Templates(directory="templates")
 
 UPLOAD_DIR = "uploads"
@@ -29,40 +28,31 @@ async def generate(
     target_role: str = Form(...),
     add_projects: str = Form("yes"),
 ):
-    # Generate unique file ID
     file_id = str(uuid.uuid4())
-    safe_filename = file.filename.replace(" ", "_")
-    file_path = os.path.join(UPLOAD_DIR, f"{file_id}_{safe_filename}")
+    file_path = os.path.join(UPLOAD_DIR, f"{file_id}_{file.filename}")
 
     # Save uploaded file
     with open(file_path, "wb") as f:
         f.write(await file.read())
 
-    # Parse resume content
-   # Read resume text
-with open(file_path, "r", errors="ignore") as f:
-    resume_text = f.read()
+    # Read resume text
+    with open(file_path, "r", errors="ignore") as f:
+        resume_text = f.read()
 
-# Parse resume
-parsed_data = parse_resume(resume_text)
+    # Parse resume into structured data
+    parsed_data = parse_resume(resume_text)
 
-# Generate resume
-final_resume = generate_resume(
-    target_role=target_role,
-    original_resume=resume_text,
-    education=parsed_data.get("education", []),
-    employment=parsed_data.get("employment", []),
-    additional_experience=add_projects,
-)
+    # Generate optimized resume
+    final_resume = generate_resume(
+        target_role=target_role,
+        original_resume=resume_text,
+        education=parsed_data.get("education", []),
+        employment=parsed_data.get("employment", []),
+        additional_experience=add_projects,
+    )
 
-
-    # Export to Word
+    # Export to Word file
     output_file = f"Generated_{file_id}.docx"
     export_to_word(final_resume, output_file)
 
-    # Return file download
-    return FileResponse(
-        path=output_file,
-        filename="Final_ATS_Resume.docx",
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    )
+    return FileResponse(output_file, filename="Final_ATS_Resume.docx")
