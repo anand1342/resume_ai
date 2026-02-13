@@ -1,153 +1,121 @@
 import re
-from collections import Counter
 
 # ==============================
-# RESUME PARSER
+# PARSE EDUCATION & EMPLOYMENT
 # ==============================
-
-def parse_resume(text):
+def parse_resume(text: str):
     """
-    Extract education and employment timeline from resume text.
-    This is a lightweight parser — avoids hallucination.
+    Extract education and employment using simple heuristics.
+    This keeps your gap detection working.
     """
 
     education = []
     employment = []
 
-    # ------------------------------
-    # EDUCATION EXTRACTION
-    # ------------------------------
+    # --- Education ---
     edu_patterns = [
-        r"(Bachelor|Master|B\.Tech|M\.Tech|BSc|MSc|MBA)[^\n]*\b(20\d{2})\b",
-        r"(University|College)[^\n]*\b(20\d{2})\b",
+        r"(Bachelor.*?)(\d{4})",
+        r"(Master.*?)(\d{4})",
+        r"(B\.?Tech.*?)(\d{4})",
+        r"(M\.?Tech.*?)(\d{4})",
     ]
 
     for pattern in edu_patterns:
         for match in re.findall(pattern, text, re.IGNORECASE):
             education.append({
                 "degree": match[0],
-                "end_year": match[-1],
+                "field": "",
                 "start_year": "",
-                "field": ""
+                "end_year": match[1],
             })
 
-    # ------------------------------
-    # EMPLOYMENT EXTRACTION
-    # ------------------------------
-    job_patterns = [
-        r"([A-Z][A-Za-z &]+)\s*\|\s*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?.*\d{4}\s*[-–]\s*(Present|\d{4})",
-        r"([A-Z][A-Za-z &]+)\s*(20\d{2})\s*[-–]\s*(20\d{2}|Present)",
-    ]
+    # --- Employment ---
+    job_pattern = r"([A-Z][A-Za-z &]+)\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?.*?(\d{4})\s*–\s*(Present|\d{4})"
 
-    for pattern in job_patterns:
-        for match in re.findall(pattern, text):
-            employment.append({
-                "company": match[0],
-                "role": "",
-                "start_date": match[1] if len(match) > 1 else "",
-                "end_date": match[-1],
-            })
+    for match in re.findall(job_pattern, text):
+        employment.append({
+            "company": match[0],
+            "role": "",
+            "start_date": match[2],
+            "end_date": match[3] if match[3] != "Present" else "",
+        })
 
     return {
         "education": education,
-        "employment": employment,
+        "employment": employment
     }
 
 
 # ==============================
-# IDENTITY EXTRACTION (ROBUST)
+# IDENTITY EXTRACTION
 # ==============================
-def extract_identity(text):
-    """
-    Extract name, email, phone safely.
-    Prevents garbage values from binary text.
-    """
+def extract_identity(text: str):
+    identity = {
+        "name": "",
+        "email": "",
+        "phone": "",
+        "location": "",
+        "linkedin": "",
+        "github": ""
+    }
 
-    lines = [l.strip() for l in text.split("\n") if l.strip()]
-
-    name = ""
-    email = ""
-    phone = ""
-
-    # ------------------------------
-    # EMAIL
-    # ------------------------------
-    email_match = re.search(r"[\w\.-]+@[\w\.-]+", text)
+    # Email
+    email_match = re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text)
     if email_match:
-        email = email_match.group(0)
+        identity["email"] = email_match.group()
 
-    # ------------------------------
-    # PHONE
-    # ------------------------------
-    phone_match = re.search(r"\+?\d[\d\-\(\) ]{8,}\d", text)
+    # Phone
+    phone_match = re.search(r"(\+?\d[\d\s\-]{8,}\d)", text)
     if phone_match:
-        phone = phone_match.group(0)
+        identity["phone"] = phone_match.group()
 
-    # ------------------------------
-    # NAME DETECTION LOGIC
-    # ------------------------------
-    for line in lines[:10]:  # only first meaningful lines
-        if any(char.isdigit() for char in line):
-            continue
-        if "@" in line:
-            continue
-        if len(line) < 3 or len(line) > 50:
-            continue
+    # LinkedIn
+    linkedin_match = re.search(r"linkedin\.com/in/[^\s]+", text)
+    if linkedin_match:
+        identity["linkedin"] = linkedin_match.group()
 
-        words = line.split()
+    # GitHub
+    github_match = re.search(r"github\.com/[^\s]+", text)
+    if github_match:
+        identity["github"] = github_match.group()
 
-        # Must look like a real name
-        if 2 <= len(words) <= 4 and all(w[0].isupper() for w in words):
-            name = line
-            break
+    # Name (first line heuristic)
+    lines = [l.strip() for l in text.split("\n") if l.strip()]
+    if lines:
+        identity["name"] = lines[0]
 
-    # ------------------------------
-    # FALLBACK FROM EMAIL
-    # ------------------------------
-    if not name and email:
-        username = email.split("@")[0]
-        username = username.replace(".", " ").replace("_", " ")
-        name = username.title()
-
-    return {
-        "name": name if name else "Candidate",
-        "email": email,
-        "phone": phone,
-    }
+    return identity
 
 
 # ==============================
-# SKILL EXTRACTION WITH WEIGHTING
+# SKILL EXTRACTION + WEIGHTING
 # ==============================
-def extract_skills(text):
-    """
-    Extract skills and determine primary vs secondary based on frequency.
-    """
-
+def extract_skills(text: str):
     text_lower = text.lower()
 
-    skill_keywords = [
-        "java", "spring", "spring boot", "hibernate",
-        "python", "django", "flask",
+    keywords = [
+        "java", "spring", "spring boot", "hibernate", "microservices",
         "c#", ".net", "asp.net",
+        "python", "django", "flask",
         "javascript", "react", "angular", "vue",
         "aws", "azure", "docker", "kubernetes",
         "sql", "mysql", "postgresql", "mongodb",
-        "microservices", "rest api", "kafka", "jenkins"
+        "jenkins", "kafka"
     ]
 
-    found = []
-    for skill in skill_keywords:
-        if skill in text_lower:
-            count = text_lower.count(skill)
-            found.extend([skill] * count)
+    counts = {}
+    for skill in keywords:
+        count = text_lower.count(skill)
+        if count > 0:
+            counts[skill] = count
 
-    counter = Counter(found)
+    sorted_skills = sorted(counts.items(), key=lambda x: x[1], reverse=True)
 
-    primary = [skill for skill, count in counter.items() if count >= 3]
-    secondary = [skill for skill, count in counter.items() if count < 3]
+    primary = [s[0] for s in sorted_skills[:5]]
+    secondary = [s[0] for s in sorted_skills[5:]]
 
     return {
-        "primary": sorted(primary),
-        "secondary": sorted(secondary),
+        "primary": primary,
+        "secondary": secondary,
+        "weights": counts
     }
