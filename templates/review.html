@@ -2,94 +2,35 @@
 <html>
 <head>
     <title>Review Resume</title>
-    <style>
-        body { font-family: Arial; margin: 40px; }
-        .gap-box {
-            border: 1px solid #ccc;
-            padding: 15px;
-            margin-bottom: 15px;
-            border-radius: 6px;
-        }
-        .skills span {
-            background: #ecf0f1;
-            padding: 6px 10px;
-            margin: 5px;
-            display: inline-block;
-            border-radius: 4px;
-        }
-        input, select {
-            padding: 6px;
-            margin: 4px 0;
-            width: 280px;
-        }
-        .btn {
-            padding: 10px 18px;
-            background: #2c3e50;
-            color: white;
-            border: none;
-            cursor: pointer;
-        }
-    </style>
 </head>
 <body>
 
-<h1>Resume Review</h1>
+<h2>Resume Review</h2>
 
-<!-- ================= SKILLS ================= -->
-<h2>Detected Skills</h2>
-{% if skills %}
-<div class="skills">
+<h3>Identity</h3>
+<p><b>Name:</b> {{ identity.name }}</p>
+<p><b>Email:</b> {{ identity.email }}</p>
+<p><b>Phone:</b> {{ identity.phone }}</p>
+
+<h3>Skills Detected</h3>
+<ul>
     {% for s in skills %}
-        <span>{{ s }}</span>
+    <li>{{ s }}</li>
     {% endfor %}
-</div>
-{% else %}
-<p>No skills detected.</p>
-{% endif %}
+</ul>
 
-<!-- ================= GAPS ================= -->
-<h2>Employment Gaps</h2>
+<h3>Detected Gaps</h3>
+<ul>
+    {% for g in gaps %}
+    <li>{{ g.between }} ({{ g.duration }} years)</li>
+    {% endfor %}
+</ul>
 
+<h3>Generate Resume</h3>
 <form action="/generate" method="post">
-<input type="hidden" name="file_id" value="{{ file_id }}">
-
-{% if gaps and gaps|length > 0 %}
-    {% for gap in gaps %}
-        <div class="gap-box">
-            <strong>Gap:</strong> {{ gap.from }} → {{ gap.to }} ({{ gap.duration_years }} yrs)<br>
-            <small>Between: {{ gap.between }}</small><br><br>
-
-            <label>Fill this gap?</label>
-            <select name="fill_{{ loop.index }}">
-                <option value="no">No</option>
-                <option value="yes">Yes</option>
-            </select><br>
-
-            <label>Employer / Client</label><br>
-            <input type="text" name="company_{{ loop.index }}"><br>
-
-            <label>Job Title</label><br>
-            <input type="text" name="role_{{ loop.index }}"><br>
-
-            <label>Location</label><br>
-            <input type="text" name="location_{{ loop.index }}"><br>
-
-            <label>Description</label><br>
-            <input type="text" name="desc_{{ loop.index }}"><br>
-        </div>
-    {% endfor %}
-{% else %}
-<p>No significant gaps detected.</p>
-{% endif %}
-
-<!-- ================= TARGET ROLE ================= -->
-<h2>Generate ATS Resume</h2>
-
-<label>Target Role:</label><br>
-<input type="text" name="target_role" placeholder="Java Developer" required><br><br>
-
-<button type="submit" class="btn">Generate Resume</button>
-
+    <input type="hidden" name="file_id" value="{{ file_id }}">
+    Target Role: <input type="text" name="target_role" required>
+    <button type="submit">Generate ATS Resume</button>
 </form>
 
 </body>

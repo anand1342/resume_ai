@@ -4,5 +4,5 @@ jinja2
 python-multipart
 openai
 python-docx
+pdfplumber
 python-dotenv
-PyPDF2

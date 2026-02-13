@@ -1,8 +1,10 @@
 from datetime import datetime
 
 def parse_year(text):
+    if not text:
+        return None
     try:
-        return int(text[:4])
+        return int(str(text)[:4])
     except:
         return None
 
@@ -12,6 +14,7 @@ def build_timeline(parsed):
     for edu in parsed.get("education", []):
         timeline.append({
             "type": "Education",
+            "label": edu.get("degree", ""),
             "start": parse_year(edu.get("start_year")),
             "end": parse_year(edu.get("end_year")),
         })
@@ -19,6 +22,7 @@ def build_timeline(parsed):
     for job in parsed.get("employment", []):
         timeline.append({
             "type": "Employment",
+            "label": job.get("company", ""),
             "start": parse_year(job.get("start_date")),
             "end": parse_year(job.get("end_date")) or datetime.now().year,
         })
@@ -29,8 +33,19 @@ def build_timeline(parsed):
 
 def detect_gaps(timeline):
     gaps = []
+
     for i in range(len(timeline) - 1):
-        gap = timeline[i+1]["start"] - timeline[i]["end"]
-        if gap > 1:
-            gaps.append({"from": timeline[i]["end"], "to": timeline[i+1]["start"], "years": gap})
+        current = timeline[i]
+        nxt = timeline[i+1]
+
+        gap = nxt["start"] - current["end"]
+
+        if gap > 0:
+            gaps.append({
+                "from": current["end"],
+                "to": nxt["start"],
+                "duration": gap,
+                "between": f"{current['label']} → {nxt['label']}"
+            })
+
     return gaps
