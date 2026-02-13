@@ -1,6 +1,6 @@
 import os
-import re
 from openai import OpenAI
+from ats_scorer import calculate_ats_score
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -8,47 +8,34 @@ SYSTEM_PROMPT = """
 You are a Senior US Recruiter and ATS Specialist.
 
 STRICT RULES:
-- Preserve identity exactly.
-- Do NOT use placeholders.
+- Preserve candidate identity exactly.
 - Keep real employers unchanged.
 - Do NOT fabricate companies.
+- Use only skills present in the resume.
 - Align responsibilities with target role.
 """
 
-def extract_ats_score(text):
-    match = re.search(r"ATS Score[:\s]+(\d+)", text)
-    return float(match.group(1)) if match else 0
-
-def generate_resume(target_role, identity, original_resume, education, employment, additional_experience):
+def generate_resume(target_role, original_resume, skills, additional_experience):
     USER_PROMPT = f"""
 Create an ATS-optimized resume.
-
-Candidate Identity:
-Name: {identity['name']}
-Email: {identity['email']}
-Phone: {identity['phone']}
-LinkedIn: {identity['linkedin']}
-GitHub: {identity['github']}
 
 Target Role: {target_role}
 
 Resume Content:
 {original_resume}
 
-Education:
-{education}
-
-Employment:
-{employment}
+Skills:
+Primary: {skills['primary']}
+Secondary: {skills['secondary']}
 
 Additional Experience:
 {additional_experience}
 
 Rules:
 - Preserve identity.
-- Keep companies real.
-- Align to target role.
-- Provide ATS Score.
+- Keep real companies.
+- Align responsibilities with target role.
+- Provide ATS Score at end.
 """
 
     response = client.chat.completions.create(
@@ -61,6 +48,6 @@ Rules:
     )
 
     resume_text = response.choices[0].message.content
-    score = extract_ats_score(resume_text)
+    ats_score = calculate_ats_score(skills, target_role)
 
-    return resume_text + f"\n\nREAL ATS Score: {score}/10"
+    return resume_text + f"\n\nREAL ATS Score: {ats_score}/10"
