@@ -1,7 +1,6 @@
 import os
 import re
 from openai import OpenAI
-from ats_scorer import calculate_ats_score
 
 # ==============================
 # OpenAI Client
