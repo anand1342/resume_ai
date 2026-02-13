@@ -2,56 +2,126 @@
 <html>
 <head>
     <title>Resume Review</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            background: #f7f7f7;
+        }
+        .card {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }
+        h2 {
+            margin-top: 0;
+        }
+        .skill-tag {
+            display: inline-block;
+            background: #007bff;
+            color: white;
+            padding: 5px 10px;
+            margin: 3px;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        .secondary {
+            background: #6c757d;
+        }
+        .gap-box {
+            background: #fff3cd;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+        .btn {
+            background: #28a745;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .btn:hover {
+            background: #218838;
+        }
+        input[type="text"] {
+            padding: 8px;
+            width: 300px;
+            margin-top: 5px;
+        }
+        label {
+            font-weight: bold;
+        }
+    </style>
 </head>
 <body>
 
-<h2>Resume Review</h2>
+<div class="card">
+    <h2>Identity</h2>
+    <p><b>Name:</b> {{ identity.name or "Not detected" }}</p>
+    <p><b>Email:</b> {{ identity.email or "Not detected" }}</p>
+    <p><b>Phone:</b> {{ identity.phone or "Not detected" }}</p>
+    <p><b>Location:</b> {{ identity.location or "Not detected" }}</p>
+</div>
 
-<h3>Identity</h3>
-<p><b>Name:</b> {{ identity.name }}</p>
-<p><b>Email:</b> {{ identity.email }}</p>
-<p><b>Phone:</b> {{ identity.phone }}</p>
+<div class="card">
+    <h2>Primary Skills</h2>
+    {% if primary_skills %}
+        {% for s in primary_skills %}
+            <span class="skill-tag">{{ s }}</span>
+        {% endfor %}
+    {% else %}
+        <p>No primary skills detected.</p>
+    {% endif %}
+</div>
 
-<h3>Primary Skills</h3>
-<ul>
-{% for s in skills.primary %}
-<li><b>{{ s }}</b></li>
-{% endfor %}
-</ul>
+<div class="card">
+    <h2>Other Skills</h2>
+    {% if secondary_skills %}
+        {% for s in secondary_skills %}
+            <span class="skill-tag secondary">{{ s }}</span>
+        {% endfor %}
+    {% else %}
+        <p>No additional skills detected.</p>
+    {% endif %}
+</div>
 
-<h3>Other Skills</h3>
-<ul>
-{% for s in skills.secondary %}
-<li>{{ s }}</li>
-{% endfor %}
-</ul>
+<div class="card">
+    <h2>Detected Gaps</h2>
 
-<h3>Detected Gaps</h3>
-{% if gaps %}
-    {% for gap in gaps %}
-        <p>Gap: {{ gap.from }} → {{ gap.to }} ({{ gap.duration_years }} years)</p>
+    {% if gaps %}
+        {% for gap in gaps %}
+            <div class="gap-box">
+                <b>{{ gap.from }} → {{ gap.to }}</b> ({{ gap.duration_years }} years)<br>
+                Between: {{ gap.between }}<br><br>
 
-        <form action="/add-gap" method="post">
-            <input type="hidden" name="file_id" value="{{ file_id }}">
-            Company: <input name="company" required>
-            Role: <input name="role" required>
-            Location: <input name="location" required>
-            Start: <input name="start" required>
-            End: <input name="end" required>
-            <button type="submit">Add Gap Experience</button>
-        </form>
-        <hr>
-    {% endfor %}
-{% else %}
-    <p>No gaps detected 🎉</p>
-{% endif %}
+                <label>
+                    Fill this gap?
+                    <input type="checkbox" name="fill_gap_{{ loop.index }}">
+                </label>
+            </div>
+        {% endfor %}
+    {% else %}
+        <p>No gaps detected 🎉</p>
+    {% endif %}
+</div>
 
-<h3>Generate Resume</h3>
-<form action="/generate" method="post">
-    <input type="hidden" name="file_id" value="{{ file_id }}">
-    Target Role: <input name="target_role" required>
-    <button type="submit">Generate ATS Resume</button>
-</form>
+<div class="card">
+    <h2>Generate Resume</h2>
+
+    <form action="/generate" method="post">
+        <input type="hidden" name="file_id" value="{{ file_id }}">
+
+        <label>Target Role:</label><br>
+        <input type="text" name="target_role" placeholder="e.g., Java Developer" required><br><br>
+
+        <button class="btn" type="submit">Generate ATS Resume</button>
+    </form>
+</div>
 
 </body>
 </html>

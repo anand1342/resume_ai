@@ -1,5 +1,7 @@
 import re
 from collections import Counter
+from skill_analyzer import analyze_skills
+
 
 # -----------------------------
 # IDENTITY EXTRACTION
@@ -31,9 +33,13 @@ KNOWN_SKILLS = [
 ]
 
 
-def extract_skills(text: str):
-    text_lower = text.lower()
-    counter = Counter()
+def extract_skills(text):
+    primary, secondary, weighted = analyze_skills(text)
+    return {
+        "primary": primary,
+        "secondary": secondary,
+        "weighted": weighted
+    }
 
     for skill in KNOWN_SKILLS:
         occurrences = text_lower.count(skill)
