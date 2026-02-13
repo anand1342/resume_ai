@@ -4,92 +4,181 @@ from fastapi.templating import Jinja2Templates
 import uuid
 import os
 
-from resume_parser import parse_resume
-from resume_optimizer import generate_resume
+from resume_parser import parse_resume, extract_identity, extract_skills
 from gap_analyzer import build_timeline, detect_gaps
+from resume_optimizer import generate_resume
 from exporter import export_to_word
+
+# ==============================
+# APP INIT
+# ==============================
 
 app = FastAPI(title="AI Resume Builder")
 
 templates = Jinja2Templates(directory="templates")
 
 UPLOAD_DIR = "uploads"
+OUTPUT_DIR = "outputs"
+
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
+# In-memory session storage
+session_store = {}
 
-# ================= HOME =================
+# ==============================
+# HOME PAGE
+# ==============================
+
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
+# ==============================
+# UPLOAD RESUME
+# ==============================
 
-# ================= UPLOAD =================
-@app.post("/upload")
+@app.post("/upload", response_class=HTMLResponse)
 async def upload_resume(request: Request, file: UploadFile = File(...)):
-    file_id = str(uuid.uuid4())
-    file_path = os.path.join(UPLOAD_DIR, f"{file_id}_{file.filename}")
+    try:
+        file_id = str(uuid.uuid4())
+        file_path = os.path.join(UPLOAD_DIR, f"{file_id}_{file.filename}")
 
-    with open(file_path, "wb") as f:
-        f.write(await file.read())
+        # Save file
+        with open(file_path, "wb") as f:
+            f.write(await file.read())
 
-    parsed = parse_resume(file_path)
+        # Read text safely
+        raw_bytes = open(file_path, "rb").read()
+        raw_text = raw_bytes.decode(errors="ignore")
 
-    timeline = build_timeline(parsed)
-    gaps = detect_gaps(timeline)
+        # Parse resume
+        parsed = parse_resume(raw_text)
+        identity = extract_identity(raw_text)
+        skills = extract_skills(raw_text)
 
-    return templates.TemplateResponse(
-        "review.html",
-        {
-            "request": request,
-            "file_id": file_id,
-            "identity": parsed.get("identity"),
-            "skills": parsed.get("skills"),
-            "education": parsed.get("education"),
-            "employment": parsed.get("employment"),
-            "gaps": gaps,
-        },
-    )
+        # Detect gaps
+        timeline = build_timeline(parsed)
+        gaps = detect_gaps(timeline)
 
+        # Store session
+        session_store[file_id] = {
+            "raw_text": raw_text,
+            "parsed": parsed,
+            "identity": identity,
+            "skills": skills or [],
+            "gaps": gaps or [],
+        }
 
-# ================= GENERATE =================
-@app.post("/generate")
-async def generate_resume_endpoint(request: Request):
-    form = await request.form()
-    file_id = form.get("file_id")
-    target_role = form.get("target_role")
+        return templates.TemplateResponse(
+            "review.html",
+            {
+                "request": request,
+                "file_id": file_id,
+                "skills": skills or [],
+                "gaps": gaps or [],
+            },
+        )
 
-    # find uploaded file
-    file_path = next(
-        (os.path.join(UPLOAD_DIR, f) for f in os.listdir(UPLOAD_DIR) if f.startswith(file_id)),
-        None
-    )
+    except Exception as e:
+        return HTMLResponse(f"Upload error: {str(e)}", status_code=500)
 
-    parsed = parse_resume(file_path)
+# ==============================
+# GENERATE PREVIEW (WITH GAP FILL)
+# ==============================
 
-    # Collect gap experience
-    additional_experience = []
+@app.post("/generate", response_class=HTMLResponse)
+async def generate_preview(request: Request):
+    try:
+        form = await request.form()
 
-    for key in form.keys():
-        if key.startswith("fill_gap_") and form.get(key) == "yes":
-            idx = key.split("_")[-1]
+        file_id = form.get("file_id")
+        target_role = form.get("target_role")
 
-            additional_experience.append({
-                "company": form.get(f"company_{idx}"),
-                "role": form.get(f"role_{idx}"),
-                "location": form.get(f"location_{idx}"),
-                "start": form.get(f"start_{idx}"),
-                "end": form.get(f"end_{idx}"),
-            })
+        if not file_id or file_id not in session_store:
+            return HTMLResponse("Session expired. Please upload resume again.", status_code=400)
 
-    final_resume = generate_resume(
-        target_role=target_role,
-        original_resume=parsed,
-        education=parsed.get("education"),
-        employment=parsed.get("employment"),
-        additional_experience=additional_experience,
-    )
+        data = session_store[file_id]
 
-    filename = f"{parsed['identity']['name'].replace(' ', '_')}_ATS_Resume.docx"
-    export_to_word(final_resume, filename)
+        # --------------------------
+        # COLLECT GAP INPUTS
+        # --------------------------
+        additional_experience = []
+        gaps = data.get("gaps", [])
 
-    return FileResponse(filename, filename=filename)
+        for i, gap in enumerate(gaps, start=1):
+            if form.get(f"fill_{i}") == "yes":
+                additional_experience.append({
+                    "company": form.get(f"company_{i}", ""),
+                    "role": form.get(f"role_{i}", target_role),
+                    "location": form.get(f"location_{i}", ""),
+                    "description": form.get(f"desc_{i}", ""),
+                    "start": gap.get("from"),
+                    "end": gap.get("to"),
+                })
+
+        # --------------------------
+        # GENERATE RESUME TEXT
+        # --------------------------
+        final_resume = generate_resume(
+            target_role=target_role,
+            original_resume=data["raw_text"],
+            education=data["parsed"].get("education", []),
+            employment=data["parsed"].get("employment", []),
+            additional_experience=additional_experience,
+        )
+
+        # Save to session
+        session_store[file_id]["generated_resume"] = final_resume
+        session_store[file_id]["target_role"] = target_role
+
+        # --------------------------
+        # SHOW PREVIEW PAGE
+        # --------------------------
+        return templates.TemplateResponse(
+            "preview.html",
+            {
+                "request": request,
+                "file_id": file_id,
+                "resume_text": final_resume,
+            },
+        )
+
+    except Exception as e:
+        return HTMLResponse(f"Generation error: {str(e)}", status_code=500)
+
+# ==============================
+# DOWNLOAD FINAL RESUME
+# ==============================
+
+@app.post("/download")
+async def download_resume(request: Request):
+    try:
+        form = await request.form()
+
+        file_id = form.get("file_id")
+        edited_resume = form.get("edited_resume")
+
+        if not file_id or file_id not in session_store:
+            return HTMLResponse("Session expired.", status_code=400)
+
+        data = session_store[file_id]
+
+        candidate_name = data["identity"].get("name", "Candidate").replace(" ", "_")
+        target_role = data.get("target_role", "Resume")
+
+        output_file = os.path.join(
+            OUTPUT_DIR,
+            f"{candidate_name}_{target_role.replace(' ', '_')}.docx"
+        )
+
+        export_to_word(edited_resume, output_file)
+
+        return FileResponse(
+            output_file,
+            filename=os.path.basename(output_file),
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+
+    except Exception as e:
+        return HTMLResponse(f"Download error: {str(e)}", status_code=500)

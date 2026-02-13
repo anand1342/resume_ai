@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Preview & Edit Resume</title>
+</head>
+<body>
+    <h2>Preview & Edit Resume</h2>
+
+    <form action="/download" method="post">
+        <input type="hidden" name="file_id" value="{{ file_id }}">
+
+        <textarea name="edited_resume" rows="30" cols="120">{{ resume_text }}</textarea>
+
+        <br><br>
+        <button type="submit">Download Final Resume</button>
+    </form>
+
+    <br>
+    <a href="/">Start Over</a>
+</body>
+</html>
