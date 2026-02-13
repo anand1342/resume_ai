@@ -1,121 +1,89 @@
 import re
-
-# ==============================
-# PARSE EDUCATION & EMPLOYMENT
-# ==============================
-def parse_resume(text: str):
-    """
-    Extract education and employment using simple heuristics.
-    This keeps your gap detection working.
-    """
-
-    education = []
-    employment = []
-
-    # --- Education ---
-    edu_patterns = [
-        r"(Bachelor.*?)(\d{4})",
-        r"(Master.*?)(\d{4})",
-        r"(B\.?Tech.*?)(\d{4})",
-        r"(M\.?Tech.*?)(\d{4})",
-    ]
-
-    for pattern in edu_patterns:
-        for match in re.findall(pattern, text, re.IGNORECASE):
-            education.append({
-                "degree": match[0],
-                "field": "",
-                "start_year": "",
-                "end_year": match[1],
-            })
-
-    # --- Employment ---
-    job_pattern = r"([A-Z][A-Za-z &]+)\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?.*?(\d{4})\s*–\s*(Present|\d{4})"
-
-    for match in re.findall(job_pattern, text):
-        employment.append({
-            "company": match[0],
-            "role": "",
-            "start_date": match[2],
-            "end_date": match[3] if match[3] != "Present" else "",
-        })
-
-    return {
-        "education": education,
-        "employment": employment
-    }
-
+from collections import defaultdict
 
 # ==============================
 # IDENTITY EXTRACTION
 # ==============================
-def extract_identity(text: str):
-    identity = {
-        "name": "",
-        "email": "",
-        "phone": "",
-        "location": "",
-        "linkedin": "",
-        "github": ""
-    }
+def extract_identity(text):
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
 
-    # Email
-    email_match = re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text)
-    if email_match:
-        identity["email"] = email_match.group()
+    name = ""
+    email = ""
+    phone = ""
 
-    # Phone
-    phone_match = re.search(r"(\+?\d[\d\s\-]{8,}\d)", text)
-    if phone_match:
-        identity["phone"] = phone_match.group()
+    for line in lines[:10]:
+        if "@" in line and "." in line:
+            email = line
+        elif re.search(r"\d{3}[-.\s]?\d{3}[-.\s]?\d{4}", line):
+            phone = line
+        elif not name and len(line.split()) <= 4:
+            name = line
 
-    # LinkedIn
-    linkedin_match = re.search(r"linkedin\.com/in/[^\s]+", text)
-    if linkedin_match:
-        identity["linkedin"] = linkedin_match.group()
-
-    # GitHub
-    github_match = re.search(r"github\.com/[^\s]+", text)
-    if github_match:
-        identity["github"] = github_match.group()
-
-    # Name (first line heuristic)
-    lines = [l.strip() for l in text.split("\n") if l.strip()]
-    if lines:
-        identity["name"] = lines[0]
-
-    return identity
+    return {"name": name, "email": email, "phone": phone}
 
 
 # ==============================
-# SKILL EXTRACTION + WEIGHTING
+# SKILL WEIGHTING ENGINE
 # ==============================
-def extract_skills(text: str):
+KNOWN_SKILLS = [
+    "java", "spring", "spring boot", "microservices", "aws", "azure",
+    "docker", "kubernetes", "jenkins", "kafka", "react", "angular",
+    "sql", "mysql", "postgresql", "mongodb", "c#", ".net", "python",
+    "hibernate", "rest", "api", "ci/cd"
+]
+
+
+def extract_skills(text):
+    """
+    Detect and weight skills → return primary & secondary.
+    """
     text_lower = text.lower()
+    skill_scores = defaultdict(int)
 
-    keywords = [
-        "java", "spring", "spring boot", "hibernate", "microservices",
-        "c#", ".net", "asp.net",
-        "python", "django", "flask",
-        "javascript", "react", "angular", "vue",
-        "aws", "azure", "docker", "kubernetes",
-        "sql", "mysql", "postgresql", "mongodb",
-        "jenkins", "kafka"
-    ]
+    # 🔹 Detect skill sections
+    skill_section_match = re.search(r"(skills|technical skills)(.*?)(\n\n|\Z)", text_lower, re.S)
+    if skill_section_match:
+        section = skill_section_match.group(2)
+        for skill in KNOWN_SKILLS:
+            if skill in section:
+                skill_scores[skill] += 5  # section weight
 
-    counts = {}
-    for skill in keywords:
-        count = text_lower.count(skill)
-        if count > 0:
-            counts[skill] = count
+    # 🔹 Count frequency
+    for skill in KNOWN_SKILLS:
+        occurrences = text_lower.count(skill)
+        if occurrences:
+            skill_scores[skill] += occurrences
 
-    sorted_skills = sorted(counts.items(), key=lambda x: x[1], reverse=True)
+    # 🔹 Boost summary section
+    summary_match = re.search(r"(summary|professional summary)(.*?)(experience)", text_lower, re.S)
+    if summary_match:
+        summary = summary_match.group(2)
+        for skill in KNOWN_SKILLS:
+            if skill in summary:
+                skill_scores[skill] += 3
 
-    primary = [s[0] for s in sorted_skills[:5]]
-    secondary = [s[0] for s in sorted_skills[5:]]
+    # 🔹 Sort skills by score
+    sorted_skills = sorted(skill_scores.items(), key=lambda x: x[1], reverse=True)
+
+    primary = [s for s, score in sorted_skills[:5]]
+    secondary = [s for s, score in sorted_skills[5:]]
 
     return {
         "primary": primary,
         "secondary": secondary,
-        "weights": counts
+        "scores": dict(sorted_skills)
+    }
+
+
+# ==============================
+# BASIC PARSER (education & employment)
+# ==============================
+def parse_resume(text):
+    education = []
+    employment = []
+
+    # naive extraction for now (safe)
+    return {
+        "education": education,
+        "employment": employment
     }

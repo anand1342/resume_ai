@@ -3,106 +3,57 @@
 <head>
     <title>Resume Review</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 40px;
-            background: #f7f7f7;
-        }
-        .card {
-            background: white;
-            padding: 20px;
-            margin-bottom: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-        }
-        h2 {
-            margin-top: 0;
-        }
-        .skill-tag {
-            display: inline-block;
-            background: #007bff;
-            color: white;
-            padding: 5px 10px;
-            margin: 3px;
-            border-radius: 4px;
-            font-size: 13px;
-        }
-        .secondary {
-            background: #6c757d;
-        }
-        .gap-box {
-            background: #fff3cd;
-            padding: 10px;
-            border-radius: 6px;
-            margin-bottom: 10px;
-        }
-        .btn {
-            background: #28a745;
-            color: white;
-            padding: 10px 15px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        .btn:hover {
-            background: #218838;
-        }
-        input[type="text"] {
-            padding: 8px;
-            width: 300px;
-            margin-top: 5px;
-        }
-        label {
-            font-weight: bold;
-        }
+        body { font-family: Arial; margin: 40px; }
+        h2 { color: #333; }
+        ul { margin-bottom: 20px; }
+        .section { margin-bottom: 30px; }
+        .gap { background: #ffe6e6; padding: 10px; margin-bottom: 10px; }
+        .skills { background: #e6f2ff; padding: 10px; }
     </style>
 </head>
 <body>
 
-<div class="card">
-    <h2>Identity</h2>
-    <p><b>Name:</b> {{ identity.name or "Not detected" }}</p>
-    <p><b>Email:</b> {{ identity.email or "Not detected" }}</p>
-    <p><b>Phone:</b> {{ identity.phone or "Not detected" }}</p>
-    <p><b>Location:</b> {{ identity.location or "Not detected" }}</p>
+<h2>Resume Review</h2>
+
+<div class="section">
+    <h3>Identity</h3>
+    <p><strong>Name:</strong> {{ identity.name or "Not detected" }}</p>
+    <p><strong>Email:</strong> {{ identity.email or "Not detected" }}</p>
+    <p><strong>Phone:</strong> {{ identity.phone or "Not detected" }}</p>
 </div>
 
-<div class="card">
-    <h2>Primary Skills</h2>
+<div class="section skills">
+    <h3>Primary Skills</h3>
     {% if primary_skills %}
+        <ul>
         {% for s in primary_skills %}
-            <span class="skill-tag">{{ s }}</span>
+            <li>{{ s|capitalize }}</li>
         {% endfor %}
+        </ul>
     {% else %}
-        <p>No primary skills detected.</p>
+        <p>No primary skills detected</p>
     {% endif %}
-</div>
 
-<div class="card">
-    <h2>Other Skills</h2>
+    <h3>Secondary Skills</h3>
     {% if secondary_skills %}
+        <ul>
         {% for s in secondary_skills %}
-            <span class="skill-tag secondary">{{ s }}</span>
+            <li>{{ s|capitalize }}</li>
         {% endfor %}
+        </ul>
     {% else %}
-        <p>No additional skills detected.</p>
+        <p>No secondary skills detected</p>
     {% endif %}
 </div>
 
-<div class="card">
-    <h2>Detected Gaps</h2>
-
+<div class="section">
+    <h3>Detected Gaps</h3>
     {% if gaps %}
         {% for gap in gaps %}
-            <div class="gap-box">
-                <b>{{ gap.from }} → {{ gap.to }}</b> ({{ gap.duration_years }} years)<br>
-                Between: {{ gap.between }}<br><br>
-
-                <label>
-                    Fill this gap?
-                    <input type="checkbox" name="fill_gap_{{ loop.index }}">
-                </label>
+            <div class="gap">
+                <strong>{{ gap.from }} → {{ gap.to }}</strong><br>
+                Duration: {{ gap.duration_years }} years<br>
+                Between: {{ gap.between }}
             </div>
         {% endfor %}
     {% else %}
@@ -110,16 +61,13 @@
     {% endif %}
 </div>
 
-<div class="card">
-    <h2>Generate Resume</h2>
-
+<div class="section">
+    <h3>Generate Resume</h3>
     <form action="/generate" method="post">
         <input type="hidden" name="file_id" value="{{ file_id }}">
-
         <label>Target Role:</label><br>
-        <input type="text" name="target_role" placeholder="e.g., Java Developer" required><br><br>
-
-        <button class="btn" type="submit">Generate ATS Resume</button>
+        <input type="text" name="target_role" placeholder="Java Developer" required><br><br>
+        <button type="submit">Generate ATS Resume</button>
     </form>
 </div>
 

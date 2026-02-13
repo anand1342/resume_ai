@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request, UploadFile, File, Form
-from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 import uuid
 import os
@@ -19,8 +19,9 @@ OUTPUT_DIR = "outputs"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# In-memory store (for demo — can move to DB later)
+# In-memory session store
 session_store = {}
+
 
 # ==============================
 # HOME PAGE
@@ -31,27 +32,6 @@ def home(request: Request):
 
 
 # ==============================
-# DASHBOARD PAGE
-# ==============================
-@app.get("/dashboard", response_class=HTMLResponse)
-def dashboard(request: Request):
-    candidates = []
-
-    for file_id, data in session_store.items():
-        candidates.append({
-            "file_id": file_id,
-            "name": data["identity"].get("name", "Unknown"),
-            "primary_skills": ", ".join(data["skills"].get("primary", [])),
-            "gap_count": len(data["gaps"]),
-        })
-
-    return templates.TemplateResponse(
-        "dashboard.html",
-        {"request": request, "candidates": candidates},
-    )
-
-
-# ==============================
 # UPLOAD RESUME
 # ==============================
 @app.post("/upload", response_class=HTMLResponse)
@@ -59,18 +39,23 @@ async def upload_resume(request: Request, file: UploadFile = File(...)):
     file_id = str(uuid.uuid4())
     file_path = os.path.join(UPLOAD_DIR, f"{file_id}_{file.filename}")
 
+    # Save file
     with open(file_path, "wb") as f:
         f.write(await file.read())
 
+    # Extract clean text
     raw_text = extract_text(file_path)
 
+    # Parse resume
     parsed = parse_resume(raw_text)
     identity = extract_identity(raw_text)
     skills_data = extract_skills(raw_text)
 
+    # Timeline & gaps
     timeline = build_timeline(parsed)
     gaps = detect_gaps(timeline)
 
+    # Store session
     session_store[file_id] = {
         "raw_text": raw_text,
         "parsed": parsed,
@@ -107,15 +92,14 @@ async def generate_final_resume(
     data = session_store[file_id]
 
     final_resume = generate_resume(
-    target_role=target_role,
-    original_resume=data["raw_text"],
-    education=data["parsed"].get("education", []),
-    employment=data["parsed"].get("employment", []),
-    additional_experience=[],
-    identity=data.get("identity", {}),
+        target_role=target_role,
+        original_resume=data["raw_text"],
+        education=data["parsed"].get("education", []),
+        employment=data["parsed"].get("employment", []),
+        additional_experience=[],
     )
-    
 
+    # Use candidate name in filename
     candidate_name = data["identity"].get("name", "Candidate").replace(" ", "_")
     output_file = os.path.join(
         OUTPUT_DIR, f"{candidate_name}_{target_role.replace(' ', '_')}.docx"
