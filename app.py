@@ -22,7 +22,6 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 # In-memory session store
 session_store = {}
 
-
 # ==============================
 # HOME PAGE
 # ==============================
@@ -39,23 +38,28 @@ async def upload_resume(request: Request, file: UploadFile = File(...)):
     file_id = str(uuid.uuid4())
     file_path = os.path.join(UPLOAD_DIR, f"{file_id}_{file.filename}")
 
-    # Save file
+    # Save uploaded file
     with open(file_path, "wb") as f:
         f.write(await file.read())
 
-    # Extract clean text
+    # Extract clean text from file
     raw_text = extract_text(file_path)
 
-    # Parse resume
+    # Parse structured data
     parsed = parse_resume(raw_text)
     identity = extract_identity(raw_text)
     skills_data = extract_skills(raw_text)
 
-    # Timeline & gaps
+    # Build timeline & detect gaps
     timeline = build_timeline(parsed)
     gaps = detect_gaps(timeline)
 
-    # Store session
+    # Determine suggested role (top primary skill)
+    suggested_role = ""
+    if skills_data.get("primary"):
+        suggested_role = f"{skills_data['primary'][0].title()} Developer"
+
+    # Store session data
     session_store[file_id] = {
         "raw_text": raw_text,
         "parsed": parsed,
@@ -64,6 +68,7 @@ async def upload_resume(request: Request, file: UploadFile = File(...)):
         "gaps": gaps,
     }
 
+    # Render review page
     return templates.TemplateResponse(
         "review.html",
         {
@@ -73,6 +78,7 @@ async def upload_resume(request: Request, file: UploadFile = File(...)):
             "primary_skills": skills_data.get("primary", []),
             "secondary_skills": skills_data.get("secondary", []),
             "gaps": gaps,
+            "suggested_role": suggested_role,
         },
     )
 
@@ -97,12 +103,14 @@ async def generate_final_resume(
         education=data["parsed"].get("education", []),
         employment=data["parsed"].get("employment", []),
         additional_experience=[],
+        identity=data["identity"],  # ✅ ensures name/email preserved
     )
 
-    # Use candidate name in filename
+    # Use candidate name for filename
     candidate_name = data["identity"].get("name", "Candidate").replace(" ", "_")
     output_file = os.path.join(
-        OUTPUT_DIR, f"{candidate_name}_{target_role.replace(' ', '_')}.docx"
+        OUTPUT_DIR,
+        f"{candidate_name}_{target_role.replace(' ', '_')}.docx"
     )
 
     export_to_word(final_resume, output_file)

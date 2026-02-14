@@ -3,18 +3,53 @@
 <head>
     <title>Resume Review</title>
     <style>
-        body { font-family: Arial; margin: 40px; }
-        h2 { color: #333; }
-        ul { margin-bottom: 20px; }
-        .section { margin-bottom: 30px; }
-        .gap { background: #ffe6e6; padding: 10px; margin-bottom: 10px; }
-        .skills { background: #e6f2ff; padding: 10px; }
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+        }
+        h2 { color: #2c3e50; }
+        .section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        ul {
+            margin-top: 10px;
+        }
+        li {
+            margin-bottom: 5px;
+        }
+        input[type="text"] {
+            padding: 8px;
+            width: 300px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #2c7be5;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #1a5fd0;
+        }
+        .gap-box {
+            background: #fff3cd;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
     </style>
 </head>
 <body>
 
 <h2>Resume Review</h2>
 
+<!-- ============================= -->
+<!-- IDENTITY -->
+<!-- ============================= -->
 <div class="section">
     <h3>Identity</h3>
     <p><strong>Name:</strong> {{ identity.name or "Not detected" }}</p>
@@ -22,35 +57,47 @@
     <p><strong>Phone:</strong> {{ identity.phone or "Not detected" }}</p>
 </div>
 
-<div class="section skills">
+<!-- ============================= -->
+<!-- PRIMARY SKILLS -->
+<!-- ============================= -->
+<div class="section">
     <h3>Primary Skills</h3>
     {% if primary_skills %}
         <ul>
-        {% for s in primary_skills %}
-            <li>{{ s|capitalize }}</li>
-        {% endfor %}
+            {% for skill in primary_skills %}
+                <li>{{ skill }}</li>
+            {% endfor %}
         </ul>
     {% else %}
-        <p>No primary skills detected</p>
-    {% endif %}
-
-    <h3>Secondary Skills</h3>
-    {% if secondary_skills %}
-        <ul>
-        {% for s in secondary_skills %}
-            <li>{{ s|capitalize }}</li>
-        {% endfor %}
-        </ul>
-    {% else %}
-        <p>No secondary skills detected</p>
+        <p>No primary skills detected.</p>
     {% endif %}
 </div>
 
+<!-- ============================= -->
+<!-- SECONDARY SKILLS -->
+<!-- ============================= -->
+<div class="section">
+    <h3>Other Skills</h3>
+    {% if secondary_skills %}
+        <ul>
+            {% for skill in secondary_skills %}
+                <li>{{ skill }}</li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p>No additional skills detected.</p>
+    {% endif %}
+</div>
+
+<!-- ============================= -->
+<!-- GAPS -->
+<!-- ============================= -->
 <div class="section">
     <h3>Detected Gaps</h3>
+
     {% if gaps %}
         {% for gap in gaps %}
-            <div class="gap">
+            <div class="gap-box">
                 <strong>{{ gap.from }} → {{ gap.to }}</strong><br>
                 Duration: {{ gap.duration_years }} years<br>
                 Between: {{ gap.between }}
@@ -61,12 +108,18 @@
     {% endif %}
 </div>
 
+<!-- ============================= -->
+<!-- GENERATE RESUME -->
+<!-- ============================= -->
 <div class="section">
     <h3>Generate Resume</h3>
+
     <form action="/generate" method="post">
         <input type="hidden" name="file_id" value="{{ file_id }}">
-        <label>Target Role:</label><br>
-        <input type="text" name="target_role" placeholder="Java Developer" required><br><br>
+
+        <label><strong>Suggested Role:</strong></label><br>
+        <input type="text" name="target_role" value="{{ suggested_role }}" required><br><br>
+
         <button type="submit">Generate ATS Resume</button>
     </form>
 </div>
